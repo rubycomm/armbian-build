@@ -20,8 +20,8 @@ Signed-off-by: Ondrej Jirman <megi@xff.cz>
  drivers/usb/gadget/function/f_eem.c    | 28 +++++------
  drivers/usb/gadget/function/f_rndis.c  | 26 ++++------
  drivers/usb/gadget/function/f_subset.c | 18 ++++---
- drivers/usb/gadget/function/u_ether.c  | 10 ++--
- 5 files changed, 47 insertions(+), 47 deletions(-)
+ drivers/usb/gadget/function/u_ether.c  | 11 ++--
+ 5 files changed, 48 insertions(+), 47 deletions(-)
 
 diff --git a/drivers/usb/gadget/function/f_ecm.c b/drivers/usb/gadget/function/f_ecm.c
 index 111111111111..222222222222 100644
@@ -257,11 +257,13 @@ index 111111111111..222222222222 100644
  	dev = netdev_priv(net);
  	g = dev->gadget;
 
-@@ -892,7 +891,6 @@ void gether_set_gadget(struct net_device *net, struct usb_gadget *g)
+@@ -892,7 +891,8 @@ void gether_set_gadget(struct net_device *net, struct usb_gadget *g)
 
  	dev = netdev_priv(net);
  	dev->gadget = g;
 -	SET_NETDEV_DEV(net, &g->dev);
++	if (g)
++		SET_NETDEV_DEV(net, &g->dev);
  }
  EXPORT_SYMBOL_GPL(gether_set_gadget);
 
