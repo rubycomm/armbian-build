@@ -1,29 +1,62 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Shlomi Marco <s.marco@rubycomm.com>
 Date: Wed, 26 Mar 2026 00:00:00 +0000
-Subject: phy: rockchip-inno-usb2: fix OTG timer cleanup on driver removal
+Subject: phy: rockchip-inno-usb2: fix OTG state machine race and timer
+ cleanup
 
-The OTG state machine delayed works (otg_sm_work, chg_work, sm_work)
-are not canceled when the device is removed or when probe fails. This
-causes a use-after-free crash when dr_mode is "otg" or "peripheral",
-because the scheduled work fires after the driver data has been freed.
+Fix two related issues with the OTG state machine delayed works:
 
-Fix this by registering devm cleanup actions that cancel all pending
-delayed works when the device is removed or probe unwinds.
+1. During probe, extcon_set_state_sync() fires the rockchip_otg_event
+   notifier which schedules otg_sm_work with a 2-second delay. When
+   this fires, DWC3 has already called phy_power_on() (suspended=false),
+   but the state machine sees state=UNDEFINED with no VBUS and calls
+   phy_power_off(), killing the 480MHz clock and dropping USB from
+   high-speed (480Mbps) to full-speed (12Mbps).
+
+   Fix by using extcon_set_state() instead of extcon_set_state_sync()
+   for the initial state sync during probe. This sets the cable state
+   for DWC3 to read via extcon_get_state() without firing notifiers
+   that schedule the premature work.
+
+2. The OTG state machine delayed works (otg_sm_work, chg_work, sm_work)
+   are not canceled when the device is removed or when probe fails.
+   This causes a use-after-free because the scheduled work fires after
+   the driver data has been freed.
+
+   Fix by registering devm cleanup actions that cancel all pending
+   delayed works when the device is removed or probe unwinds.
 
 Signed-off-by: Shlomi Marco <s.marco@rubycomm.com>
 ---
- drivers/phy/rockchip/phy-rockchip-inno-usb2.c | 24 +++++++++++++++++++++++-
- 1 file changed, 23 insertions(+), 1 deletion(-)
+ drivers/phy/rockchip/phy-rockchip-inno-usb2.c | 33 ++++++++++++++++++++++++--
+ 1 file changed, 31 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/phy/rockchip/phy-rockchip-inno-usb2.c b/drivers/phy/rockchip/phy-rockchip-inno-usb2.c
 index 111111111111..222222222222 100644
 --- a/drivers/phy/rockchip/phy-rockchip-inno-usb2.c
 +++ b/drivers/phy/rockchip/phy-rockchip-inno-usb2.c
-@@ -1359,6 +1359,21 @@ static int rockchip_usb2phy_otg_port_init(struct rockchip_usb2phy *rphy,
+@@ -1358,7 +1358,15 @@ static int rockchip_usb2phy_otg_port_init(struct rockchip_usb2phy *rphy,
+ 		if (!of_property_present(rphy->dev->of_node, "extcon")) {
+-			/* do initial sync of usb state */
++			/*
++			 * Set initial USB host state without firing
++			 * notifiers. Using extcon_set_state_sync() here
++			 * would trigger rockchip_otg_event() which
++			 * schedules the OTG state machine work before
++			 * the PHY consumer (e.g. DWC3) has called
++			 * phy_init()/phy_power_on(), causing a premature
++			 * phy_power_off() that drops USB to full-speed.
++			 */
+ 			id = property_enabled(rphy->grf, &rport->port_cfg->utmi_id);
+-			extcon_set_state_sync(rphy->edev, EXTCON_USB_HOST, !id);
++			extcon_set_state(rphy->edev, EXTCON_USB_HOST, !id);
+ 		}
+ 	}
+ 
+@@ -1367,6 +1374,21 @@ out:
  	return ret;
  }
-
+ 
 +static void rockchip_usb2phy_otg_work_cleanup(void *data)
 +{
 +	struct rockchip_usb2phy_port *rport = data;
@@ -42,7 +75,7 @@ index 111111111111..222222222222 100644
  static int rockchip_usb2phy_probe(struct platform_device *pdev)
  {
  	struct device *dev = &pdev->dev;
-@@ -1488,6 +1503,13 @@ static int rockchip_usb2phy_probe(struct platform_device *pdev)
+@@ -1496,7 +1518,14 @@ static int rockchip_usb2phy_probe(struct platform_device *pdev)
  			if (ret)
  				goto put_child;
  		}
@@ -57,6 +90,6 @@ index 111111111111..222222222222 100644
 +
  next_child:
  		/* to prevent out of boundary */
--- 
+ 		if (++index >= rphy->phy_cfg->num_ports)
+--
 Armbian
-

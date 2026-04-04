@@ -27,6 +27,7 @@ case $BRANCH in
 
 	current)
 		declare -g KERNEL_MAJOR_MINOR="6.18"
+		declare -g KERNELBRANCH='tag:v6.18.20'
 		declare -g LINUXFAMILY=rockchip64
 		declare -g LINUXCONFIG='linux-rockchip64-'$BRANCH
 		;;
