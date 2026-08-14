@@ -303,6 +303,21 @@ function docker_cli_prepare_dockerfile() {
 		${c}${c_req}RUN echo "--> CACHE MISS IN DOCKERFILE: running Armbian requirements initialization." && \\
 		${c}${c_req} ARMBIAN_INSIDE_DOCKERFILE_BUILD="yes" /bin/bash "${DOCKER_ARMBIAN_TARGET_PATH}/compile.sh" requirements SHOW_LOG=yes && \\
 		${c}${c_req} rm -rf "${DOCKER_ARMBIAN_TARGET_PATH}/output" "${DOCKER_ARMBIAN_TARGET_PATH}/.tmp" "${DOCKER_ARMBIAN_TARGET_PATH}/cache"
+		RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && \
+		 DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades \
+		 gcc-13-aarch64-linux-gnu-base=13.3.0-6ubuntu2~24.04cross1 \
+		 gcc-13-aarch64-linux-gnu=13.3.0-6ubuntu2~24.04cross1 \
+		 cpp-13-aarch64-linux-gnu=13.3.0-6ubuntu2~24.04cross1 \
+		 libgcc-13-dev-arm64-cross=13.3.0-6ubuntu2~24.04cross1 \
+		 gcc-13-cross-base=13.3.0-6ubuntu2~24.04cross1 \
+		 binutils-aarch64-linux-gnu=2.42-4ubuntu2.8 \
+		 binutils-common=2.42-4ubuntu2.8 \
+		 libbinutils=2.42-4ubuntu2.8 \
+		 libctf-nobfd0=2.42-4ubuntu2.8 \
+		 libctf0=2.42-4ubuntu2.8 \
+		 libgprofng0=2.42-4ubuntu2.8 \
+		 libsframe1=2.42-4ubuntu2.8 && \
+		 rm -rf /var/lib/apt/lists/*
 		${docker_include_dot_git_dir}
 	INITIAL_DOCKERFILE
 	# For debugging: RUN rm -fv /usr/bin/pip3 # Remove pip3 symlink to make sure we're not depending on it; non-Dockers may not have it
